@@ -13,7 +13,7 @@ class OpenaiLLM(LLM):
     def get_completion(self, messages, tools=None, response_format=None):
         response = self.client.beta.chat.completions.parse(
             model=self.model,
-            max_completion_tokens=16000,
+            max_completion_tokens=10000,
             messages=messages,
             **({"tools": tools} if tools is not None else {}),
             **({"response_format": response_format} if response_format is not None else {}),

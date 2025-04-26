@@ -16,7 +16,7 @@ class AnthropicLLM(LLM):
 
 		response = self.client.messages.create(
 			model=self.model,
-			max_tokens=1000,
+			max_tokens=10000,
 			system=messages[0]["content"],
 			messages=messages[1:],
 			**({"tools": tools} if tools is not None else {}),

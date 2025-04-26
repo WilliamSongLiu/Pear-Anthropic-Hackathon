@@ -27,21 +27,27 @@ def generate_project_structure(user_prompt):
     messages = [
         {
             "role": "system",
-            "content": """You are tasked with generating a project structure and file descriptions for a web development project based on a user's prompt. Your output should be a JSON object containing two main objects: 'deps' (dependencies) and 'descriptions'."""
+            "content": """You are tasked with generating a project structure and file descriptions for a React Three Fiber project based on a user's prompt. Your output should be a JSON object containing two main objects: 'deps' (dependencies) and 'descriptions'."""
         },
         {
             "role": "user",
-            "content": f"""First, analyze the user's prompt to understand the project requirements. Then, follow these steps:
+            "content": f"""First, you are provided with a starter code template containing the following files:
+- index.html
+- src/App.jsx
+- index.jsx
+- styles.css
+You do not have to specify these files in your described project structure.
+
+Now, analyze the user's prompt to understand the project requirements. Then, follow these steps:
 
 1. Generate the 'deps' object:
    - Create a hierarchical structure representing the project's file and folder organization.
-   - Create a 'src' folder for the main source code.
    - Include appropriate subfolders for assets, components, and other necessary project elements.
    - List individual files within each folder.
    - Represent the structure as nested objects, where each key is a file or folder name, and the value is an array of its contents (empty array for files).
    - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
-   - Do not create files for sprites, music, favicons, or images. Only utilize javascript files to create 3D models using React Three Fiber.
-   - Do not create files for README.md, package.json, or index.html.
+   - Do not create files for sprites, music, favicons, or images. Only utilize JavaScript to create 3D models using React Three Fiber.
+   - Do not create unrelated files for README.md, package.json, or .gitignore.
    - Create jsx files instead of js files.
 
 2. Generate the 'descriptions' object:
@@ -352,6 +358,5 @@ def generate_app(user_prompt):
         print("You can manually open the browser and navigate to http://localhost:5173")
 
 if __name__ == "__main__":
-    # Example usage
-    user_input = "Create a 3D spinning cube using React Three Fiber"
+    user_input = "Create a simple aim trainer game using React Three Fiber. The user has a pistol and can shoot down spherical targets that are spawned one at a time in front of the user. The score is increased by 100 for every target they hit. The shooting detection is hitscan, not projectile."
     generate_app(user_input)
