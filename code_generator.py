@@ -8,6 +8,8 @@ import webbrowser
 import time
 import requests
 import socket
+import concurrent.futures
+import argparse
 
 # Configuration
 COMPANY = "anthropic"
@@ -16,12 +18,16 @@ LLM = make_llm(COMPANY, MODEL, temperature=0)
 
 # Constants
 STARTER_DIR = "starter"
-OUTPUT_DIR = "output"
+OUTPUT_DIR_SEQUENTIAL = "output_sequential"
+OUTPUT_DIR_PARALLEL = "output_parallel"
 IGNORED_FILES = [
     "index.html",
     "src/App.jsx",
     "src/index.jsx"
 ]
+# Port configuration
+PORT_SEQUENTIAL = 5173
+PORT_PARALLEL = 5174
 
 # Project Structure Generation
 def generate_project_structure(user_prompt: str) -> Dict:
@@ -104,22 +110,25 @@ def generate_project_structure(user_prompt: str) -> Dict:
         return None
 
 # File System Operations
-def copy_starter_to_output() -> None:
+def copy_starter_to_output(output_dir: str) -> None:
     """
-    Creates a copy of the 'starter' folder in the 'output' folder.
+    Creates a copy of the 'starter' folder in the specified output folder.
     If the output folder already exists, it will be removed first to ensure a clean copy.
     Excludes node_modules and package-lock.json, then runs npm install.
+
+    Args:
+        output_dir: The directory to copy the starter files to
     """
-    if os.path.exists(OUTPUT_DIR):
-        shutil.rmtree(OUTPUT_DIR)
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
 
     ignore_patterns = shutil.ignore_patterns('node_modules', 'package-lock.json')
-    shutil.copytree(STARTER_DIR, OUTPUT_DIR, ignore=ignore_patterns)
-    print(f"Successfully copied {STARTER_DIR} to {OUTPUT_DIR}")
+    shutil.copytree(STARTER_DIR, output_dir, ignore=ignore_patterns)
+    print(f"Successfully copied {STARTER_DIR} to {output_dir}")
 
     print("Installing dependencies...")
     with open(os.devnull, 'w') as devnull:
-        subprocess.run(["npm", "install"], cwd=OUTPUT_DIR, check=True, stdout=devnull, stderr=devnull)
+        subprocess.run(["npm", "install"], cwd=output_dir, check=True, stdout=devnull, stderr=devnull)
     print("Dependencies installed successfully")
 
 def setup_folder_structure(job_files: Dict[str, str]) -> None:
@@ -297,15 +306,47 @@ def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
+def find_available_port(start_port: int, max_attempts: int = 10) -> int:
+    """
+    Find an available port starting from the given port.
+
+    Args:
+        start_port: The port to start checking from
+        max_attempts: Maximum number of ports to check
+
+    Returns:
+        An available port number
+    """
+    port = start_port
+    for _ in range(max_attempts):
+        if not is_port_in_use(port):
+            return port
+        port += 1
+    raise RuntimeError(f"Could not find an available port after {max_attempts} attempts")
+
 # Main Application Generation
-def generate_react_three_app(user_prompt: str) -> None:
+def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> None:
     """
     Main function to generate a complete React Three Fiber app based on the user's prompt.
 
     Args:
         user_prompt: The user's description of the project they want to create
+        use_parallel: Whether to use parallel processing for file generation
     """
     print(f"Generating app based on prompt: {user_prompt}")
+    print(f"Using {'parallel' if use_parallel else 'sequential'} processing")
+
+    # Determine output directory based on processing mode
+    output_dir = OUTPUT_DIR_PARALLEL if use_parallel else OUTPUT_DIR_SEQUENTIAL
+    base_port = PORT_PARALLEL if use_parallel else PORT_SEQUENTIAL
+
+    # Find an available port
+    try:
+        port = find_available_port(base_port)
+        print(f"Using port {port} for the development server")
+    except RuntimeError as e:
+        print(f"Warning: {e}. Using default port {base_port}.")
+        port = base_port
 
     # Step 1: Generate project structure
     print("\nStep 1: Generating project structure...")
@@ -326,12 +367,12 @@ def generate_react_three_app(user_prompt: str) -> None:
     print("----------------------------")
 
     # Step 2: Copy starter folder to output
-    print("\nStep 2: Copying starter folder to output...")
-    copy_starter_to_output()
+    print(f"\nStep 2: Copying starter folder to {output_dir}...")
+    copy_starter_to_output(output_dir)
 
     # Step 3: Set up the folder structure in the output directory
     print("\nStep 3: Setting up folder structure...")
-    os.chdir(OUTPUT_DIR)
+    os.chdir(output_dir)
     setup_folder_structure(descriptions)
 
     # Step 4: Generate App.jsx
@@ -343,40 +384,98 @@ def generate_react_three_app(user_prompt: str) -> None:
         job_files=descriptions
     )
 
-    # Step 5: Generate code for each file
-    print("\nStep 5: Generating code for each file...")
-    for file_path in files:
-        if file_path in IGNORED_FILES:
-            print(f"\nSkipping {file_path} (in ignored files list)...")
-            continue
+    # Step 5: Generate code for each file (either sequentially or in parallel)
+    print(f"\nStep 5: Generating code for each file {'in parallel' if use_parallel else 'sequentially'}...")
 
+    # Filter out ignored files
+    files_to_generate = [file_path for file_path in files if file_path not in IGNORED_FILES]
+
+    # Function to generate a single file with retry logic
+    def generate_file_with_retry(file_path, max_retries=3):
         file_description = descriptions.get(file_path, "No description provided")
         print(f"\nGenerating code for {file_path}...")
         task = f"Implement the {os.path.basename(file_path)} file for the project. {file_description}"
-        generate_leaf_code(
-            task=task,
-            file_path=file_path,
-            file_description=file_description,
-            job_files=descriptions
-        )
-        print(f"✓ Completed {file_path}")
 
-    print("\nCode generation completed successfully!")
+        for attempt in range(max_retries):
+            try:
+                generate_leaf_code(
+                    task=task,
+                    file_path=file_path,
+                    file_description=file_description,
+                    job_files=descriptions
+                )
+                print(f"✓ Completed {file_path}")
+                return True
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"Error generating {file_path} (attempt {attempt+1}/{max_retries}): {e}")
+                    print(f"Retrying in 2 seconds...")
+                    time.sleep(2)
+                else:
+                    print(f"Failed to generate {file_path} after {max_retries} attempts: {e}")
+                    return False
+
+    if use_parallel:
+        # Run all file generations in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(files_to_generate))) as executor:
+            # Submit all tasks
+            future_to_file = {executor.submit(generate_file_with_retry, file_path): file_path for file_path in files_to_generate}
+
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_file):
+                file_path = future_to_file[future]
+                try:
+                    success = future.result()
+                    if not success:
+                        print(f"Warning: Failed to generate {file_path} after all retry attempts")
+                except Exception as e:
+                    print(f"Error processing {file_path}: {e}")
+    else:
+        # Run file generations sequentially
+        for file_path in files_to_generate:
+            success = generate_file_with_retry(file_path)
+            if not success:
+                print(f"Warning: Failed to generate {file_path} after all retry attempts")
+
+    print("\nCode generation completed!")
 
     # Step 6: Start the development server
     print("\nStep 6: Starting development server...")
-    print("Starting Vite development server...")
+    print(f"Starting Vite development server on port {port}...")
+
+    # Create a vite.config.js file with the custom port
+    with open("vite.config.js", "w") as f:
+        f.write(f"""import {{ defineConfig }} from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vitejs.dev/config/
+export default defineConfig({{
+  plugins: [react()],
+  server: {{
+    port: {port}
+  }}
+}})
+""")
+
     with open(os.devnull, 'w') as devnull:
         vite_process = subprocess.Popen(["npm", "run", "dev"], stdout=devnull, stderr=devnull)
 
-    server_url = "http://localhost:5173"
+    server_url = f"http://localhost:{port}"
     if wait_for_server(server_url):
         print("Opening webpage...")
         webbrowser.open(server_url)
     else:
         print("Could not open webpage because the server did not start properly.")
-        print("You can manually open the browser and navigate to http://localhost:5173")
+        print(f"You can manually open the browser and navigate to {server_url}")
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Generate a React Three Fiber app based on a prompt')
+    parser.add_argument('-p', '--parallel', action='store_true',
+                        help='Use parallel processing for file generation')
+    args = parser.parse_args()
+
+    # Define the prompt here
     user_input = "Create a 3D office scene with a desk and monitor on it"
-    generate_react_three_app(user_input)
+
+    generate_react_three_app(user_input, args.parallel)
