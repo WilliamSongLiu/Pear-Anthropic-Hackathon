@@ -162,9 +162,9 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
         You will be provided with the requirements for what the file does, as well as its role in the overall project.
         The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
         Only provide code, do not provide an explanation before or after the code.
-        
+
         Your task will be to create the App.jsx file. App.jsx will always be the top-level controller and will render the entire project.
-        As such, it is very important that you import all the necessary components and render them. You will have context on what those components 
+        As such, it is very important that you import all the necessary components and render them. You will have context on what those components
         from their file descriptions. You get to define the abstractions that those files implement. Ensure that if the abstractions
         are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, app.jsx
         should have very little code in it and can just utilize the components implemented by the other jobs."""
@@ -266,30 +266,6 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
     with open(file_path, 'w') as f:
         f.write(content)
 
-def flatten_deps(deps, prefix="", result=None):
-    """
-    Flattens the nested deps structure into a list of file paths.
-
-    Args:
-        deps: The nested deps structure
-        prefix: The current path prefix
-        result: The result list to append to
-
-    Returns:
-        A list of file paths
-    """
-    if result is None:
-        result = []
-
-    for key, value in deps.items():
-        path = os.path.join(prefix, key)
-        if isinstance(value, list) and not value:  # Empty list means it's a file
-            result.append(path)
-        elif isinstance(value, dict):  # Dictionary means it's a directory
-            flatten_deps(value, path, result)
-
-    return result
-
 def wait_for_server(url, max_attempts=30, delay=1):
     """
     Wait for a server to become available by checking if it responds to HTTP requests.
@@ -363,11 +339,9 @@ def generate_app(user_prompt):
     print(json.dumps(descriptions, indent=2))
     print("----------------------------")
 
-    # Flatten the deps structure to get a list of all files
-    all_files = flatten_deps(deps)
-
     # Files to skip during generation (these should already exist in the starter template)
     ignored_files = [
+        "index.html",
         "src/App.jsx",
         "src/index.jsx"
     ]
@@ -393,7 +367,7 @@ def generate_app(user_prompt):
 
     # Step 4: Generate code for each file
     print("\nStep 4: Generating code for each file...")
-    for file_path in all_files:
+    for file_path in descriptions.keys():
         if file_path in ignored_files:
             print(f"\nSkipping {file_path} (in ignored files list)...")
             continue
