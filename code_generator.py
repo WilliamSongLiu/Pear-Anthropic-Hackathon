@@ -10,6 +10,7 @@ import requests
 import socket
 import concurrent.futures
 import argparse
+import datetime
 
 # Configuration
 COMPANY = "anthropic"
@@ -333,6 +334,9 @@ def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> No
         user_prompt: The user's description of the project they want to create
         use_parallel: Whether to use parallel processing for file generation
     """
+    # Start the timer
+    start_time = time.time()
+
     print(f"Generating app based on prompt: {user_prompt}")
     print(f"Using {'parallel' if use_parallel else 'sequential'} processing")
 
@@ -467,6 +471,12 @@ export default defineConfig({{
     else:
         print("Could not open webpage because the server did not start properly.")
         print(f"You can manually open the browser and navigate to {server_url}")
+
+    # Calculate and print the total time taken
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    formatted_time = str(datetime.timedelta(seconds=int(elapsed_time)))
+    print(f"\nTotal time taken: {formatted_time} ({elapsed_time:.2f} seconds)")
 
 if __name__ == "__main__":
     # Parse command line arguments
