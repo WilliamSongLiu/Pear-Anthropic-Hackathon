@@ -2,6 +2,9 @@ from llm_selector import make_llm
 from typing import Dict, List, Set
 import os
 import shutil
+import subprocess
+import webbrowser
+import time
 
 company = "openai"
 model = "gpt-4o-mini"
@@ -58,14 +61,10 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
     """
     system_message = {
         "role": "system",
-        "content": """You are an expert programmer. You receive coding tasks and complete them with high-quality, production-ready code.
-        Follow these guidelines:
-        1. Write clean, well-documented code
-        2. Include necessary imports
-        3. Follow best practices for the language/framework
-        4. Consider the file's role in the larger system
-        5. Do not write excessive or unnecessary code
-        6. Only provide code, do not provide an explanation before or after the code"""
+        "content": """You will receive specific coding tasks and complete the implementation of individual files.
+        You will be provided with the requirements for what the file does, as well as its role in the overall project.
+        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
+        Only provide code, do not provide an explanation before or after the code."""
     }
 
     # Create context about the file's role and related files
@@ -110,7 +109,16 @@ Please write the complete code for this file, including all necessary imports an
 if __name__ == "__main__":
     # Define the project structure
     job_description = "Write a Crossy Road game using Three.js, React-Three-Fiber, and Vite.js"
+
+    # Files to skip during generation (these should already exist in the starter template)
+    ignored_files = [
+        "src/App.jsx",
+        "src/index.jsx"
+    ]
+
     job_files = {
+        "src/index.jsx": "Entry point that imports React, renders `<App />` into the root element, and applies global styles.",
+        "src/App.jsx": "Top-level controller that sets up all Context providers, lays out the main view, and composes state + logic components.",
         "src/styles.css": "Global stylesheet defining base typography, layout containers, and theme variables.",
         "src/assets/models/ChickenModel.jsx": "Exports a React component that loads and returns a 3D chicken model for use in the scene.",
         "src/assets/models/CarModel.jsx": "Exports a React component that loads and returns a 3D car model for use in the scene.",
@@ -138,6 +146,10 @@ if __name__ == "__main__":
     # Step 3: Generate code for each file
     print("\nStep 3: Generating code for each file...")
     for file_path, file_description in job_files.items():
+        if file_path in ignored_files:
+            print(f"\nSkipping {file_path} (in ignored files list)...")
+            continue
+
         print(f"\nGenerating code for {file_path}...")
         task = f"Implement the {os.path.basename(file_path)} file for the Crossy Road game. {file_description}"
         generate_leaf_code(
@@ -149,3 +161,17 @@ if __name__ == "__main__":
         print(f"✓ Completed {file_path}")
 
     print("\nCode generation completed successfully!")
+
+    # Step 4: Install dependencies and start the development server
+    print("\nStep 4: Starting development server...")
+    # # Install dependencies
+    # print("Installing dependencies...")
+    # subprocess.run(["npm", "install"], check=True)
+
+    # Start the development server in the background
+    print("Starting Vite development server...")
+    vite_process = subprocess.Popen(["npm", "run", "dev"])
+
+    # Open the webpage in the default browser
+    print("Opening webpage...")
+    webbrowser.open("http://localhost:5173")
