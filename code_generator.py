@@ -1,21 +1,21 @@
 from llm_selector import make_llm
-from typing import Dict, List, Set
+from typing import Dict
 import os
 import shutil
 import subprocess
 import webbrowser
-import time
 
-company = "openai"
-model = "gpt-4o-mini"
-# company = "anthropic"
-# model = "claude-3-5-sonnet-latest"
+# company = "openai"
+# model = "gpt-4o-mini"
+company = "anthropic"
+model = "claude-3-5-haiku-latest"
 llm = make_llm(company, model)
 
 def copy_starter_to_output() -> None:
     """
     Creates a copy of the 'starter' folder in the 'output' folder.
     If the output folder already exists, it will be removed first to ensure a clean copy.
+    Excludes node_modules and package-lock.json, then runs npm install.
     """
     starter_dir = "starter"
     output_dir = "output"
@@ -24,9 +24,17 @@ def copy_starter_to_output() -> None:
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
 
-    # Copy the entire starter directory to output
-    shutil.copytree(starter_dir, output_dir)
+    # Define what to ignore during copy
+    ignore_patterns = shutil.ignore_patterns('node_modules', 'package-lock.json')
+
+    # Copy the starter directory to output, excluding specified files/directories
+    shutil.copytree(starter_dir, output_dir, ignore=ignore_patterns)
     print(f"Successfully copied {starter_dir} to {output_dir}")
+
+    # Run npm install in the output directory
+    print("Installing dependencies...")
+    subprocess.run(["npm", "install"], cwd=output_dir, check=True)
+    print("Dependencies installed successfully")
 
 def setup_folder_structure(job_files: Dict[str, str]) -> None:
     """
@@ -108,7 +116,7 @@ Please write the complete code for this file, including all necessary imports an
 
 if __name__ == "__main__":
     # Define the project structure
-    job_description = "Write a Crossy Road game using Three.js, React-Three-Fiber, and Vite.js"
+    job_description = "Create a spinning 3D cube using Three.js, React-Three-Fiber, and Vite.js"
 
     # Files to skip during generation (these should already exist in the starter template)
     ignored_files = [
@@ -117,20 +125,11 @@ if __name__ == "__main__":
     ]
 
     job_files = {
-        "src/index.jsx": "Entry point that imports React, renders `<App />` into the root element, and applies global styles.",
-        "src/App.jsx": "Top-level controller that sets up all Context providers, lays out the main view, and composes state + logic components.",
-        "src/styles.css": "Global stylesheet defining base typography, layout containers, and theme variables.",
-        "src/assets/models/ChickenModel.jsx": "Exports a React component that loads and returns a 3D chicken model for use in the scene.",
-        "src/assets/models/CarModel.jsx": "Exports a React component that loads and returns a 3D car model for use in the scene.",
-        "src/assets/models/TreeModel.jsx": "Exports a React component that loads and returns a 3D tree model for use in the scene.",
-        "src/components/state/Map.jsx": "Creates and provides map-layout state (tile grid, obstacles) via React Context.",
-        "src/components/state/Score.jsx": "Creates and provides player score state and an updater function via Context.",
-        "src/components/state/PlayerPosition.jsx": "Creates and provides player position state and an updater function via Context.",
-        "src/components/state/CarInstances.jsx": "Creates and provides the array of active car instances and methods to add/remove them via Context.",
-        "src/components/logic/PlayerMovement.jsx": "Listens for keyboard/touch input and invokes the PlayerPosition updater to move the player.",
-        "src/components/logic/CarMovement.jsx": "Subscribes to CarInstances state and advances each car's position on every animation frame.",
-        "src/components/logic/MapGeneration.jsx": "Runs once on mount to generate the initial map layout and populates the Map context.",
-        "src/components/logic/CarSpawning.jsx": "On a fixed interval, creates new car entries in CarInstances state at spawn points."
+        "src/components/Cube.jsx": "Defines the 3D cube component using React Three Fiber. Implements the cube geometry with materials and rotation animation.",
+        "src/components/Scene.jsx": "Sets up the 3D scene with camera, lighting, and environment. Contains the Canvas component from React Three Fiber and imports the Cube component.",
+        "src/App.jsx": "Main application component that renders the Scene component and provides the overall structure for the application.",
+        "src/index.jsx": "Entry point of the application. Renders the App component to the DOM and sets up React.",
+        "src/styles.css": "Contains CSS styles for the application, including canvas sizing and any UI elements."
     }
 
     # Step 1: Copy starter folder to output
@@ -164,9 +163,6 @@ if __name__ == "__main__":
 
     # Step 4: Install dependencies and start the development server
     print("\nStep 4: Starting development server...")
-    # # Install dependencies
-    # print("Installing dependencies...")
-    # subprocess.run(["npm", "install"], check=True)
 
     # Start the development server in the background
     print("Starting Vite development server...")
