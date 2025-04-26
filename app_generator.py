@@ -1,0 +1,357 @@
+from llm_selector import make_llm
+from typing import Dict
+import json
+import os
+import shutil
+import subprocess
+import webbrowser
+import time
+import requests
+import socket
+
+company = "anthropic"
+model = "claude-3-7-sonnet-20250219"
+llm = make_llm(company, model, temperature=0)
+
+def generate_project_structure(user_prompt):
+    """
+    Generates a project structure based on the user's prompt.
+
+    Args:
+        user_prompt: The user's description of the project they want to create
+
+    Returns:
+        A dictionary containing 'deps' and 'descriptions' for the project structure
+    """
+    # Construct the system and user messages
+    messages = [
+        {
+            "role": "system",
+            "content": """You are tasked with generating a project structure and file descriptions for a web development project based on a user's prompt. Your output should be a JSON object containing two main objects: 'deps' (dependencies) and 'descriptions'."""
+        },
+        {
+            "role": "user",
+            "content": f"""First, analyze the user's prompt to understand the project requirements. Then, follow these steps:
+
+1. Generate the 'deps' object:
+   - Create a hierarchical structure representing the project's file and folder organization.
+   - Create a 'src' folder for the main source code.
+   - Include appropriate subfolders for assets, components, and other necessary project elements.
+   - List individual files within each folder.
+   - Represent the structure as nested objects, where each key is a file or folder name, and the value is an array of its contents (empty array for files).
+   - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
+   - Do not create files for sprites, music, favicons, or images. Only utilize javascript files to create 3D models using React Three Fiber.
+   - Do not create files for README.md, package.json, or index.html.
+   - Create jsx files instead of js files.
+
+2. Generate the 'descriptions' object:
+   - For each file in the 'deps' object, create a corresponding entry in the 'descriptions' object.
+   - The key should be the file path, and the value should be a brief description of the file's purpose or contents.
+   - Ensure descriptions are concise but informative, explaining the role of each file in the project.
+   - If there are files requiring 3D models, describe the task as creating the 3D object from primitives, not by importing outside 3D models
+
+3. Format your response as a JSON object with 'deps' and 'descriptions' as its main properties.
+
+Your final output should be formatted as follows:
+
+<answer>
+{{
+  "deps": {{
+    // Your generated deps object here
+  }},
+  "descriptions": {{
+    // Your generated descriptions object here
+  }}
+}}
+</answer>
+
+Remember to tailor the project structure and descriptions to the specific requirements mentioned in the user's prompt:
+
+<user_prompt>
+{user_prompt}
+</user_prompt>
+
+Ensure that your generated project structure and file descriptions are relevant to the user's request and follow best practices for the type of project they're asking about."""
+        }
+    ]
+
+    # Get completion from Claude
+    response, _ = llm.get_completion(messages)
+
+    # Extract JSON from the response
+    try:
+        # Find the JSON content between <answer> tags
+        start = response.find("<answer>") + len("<answer>")
+        end = response.find("</answer>")
+        json_str = response[start:end].strip()
+
+        # Parse and return the JSON
+        return json.loads(json_str)
+    except Exception as e:
+        print(f"Error parsing response: {e}")
+        return None
+
+def copy_starter_to_output() -> None:
+    """
+    Creates a copy of the 'starter' folder in the 'output' folder.
+    If the output folder already exists, it will be removed first to ensure a clean copy.
+    Excludes node_modules and package-lock.json, then runs npm install.
+    """
+    starter_dir = "starter"
+    output_dir = "output"
+
+    # Remove output directory if it exists
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+
+    # Define what to ignore during copy
+    ignore_patterns = shutil.ignore_patterns('node_modules', 'package-lock.json')
+
+    # Copy the starter directory to output, excluding specified files/directories
+    shutil.copytree(starter_dir, output_dir, ignore=ignore_patterns)
+    print(f"Successfully copied {starter_dir} to {output_dir}")
+
+    # Run npm install in the output directory
+    print("Installing dependencies...")
+    # Redirect output to devnull to prevent console clutter
+    with open(os.devnull, 'w') as devnull:
+        subprocess.run(["npm", "install"], cwd=output_dir, check=True, stdout=devnull, stderr=devnull)
+    print("Dependencies installed successfully")
+
+def setup_folder_structure(job_files: Dict[str, str]) -> None:
+    """
+    Creates the folder structure and empty files specified in job_files if they don't exist.
+    Preserves existing files.
+
+    Args:
+        job_files: Dictionary mapping file paths to their descriptions
+    """
+    for file_path, _ in job_files.items():
+        # Get the directory path
+        dir_path = os.path.dirname(file_path)
+
+        # Create directories if they don't exist
+        if dir_path and not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        # Create file if it doesn't exist
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as f:
+                pass  # Create empty file
+
+def generate_leaf_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
+    """
+    Generate code for a leaf node task and write it to the specified file.
+
+    Args:
+        task: The specific coding task to implement
+        file_path: Path to the file where the code should be written
+        file_description: Description of this file's role in the system
+        job_files: Dictionary of all files and their descriptions for context
+    """
+    system_message = {
+        "role": "system",
+        "content": """You will receive specific coding tasks and complete the implementation of individual files.
+        You will be provided with the requirements for what the file does, as well as its role in the overall project.
+        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
+        Only provide code, do not provide an explanation before or after the code."""
+    }
+
+    # Create context about the file's role and related files
+    related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
+
+    user_message = {
+        "role": "user",
+        "content": f"""Please write code for the following task:
+
+Task: {task}
+
+This code will go in: {file_path}
+File's role: {file_description}
+
+Related files in the system:
+{related_files}
+
+Please write the complete code for this file, including all necessary imports and setup."""
+    }
+
+    messages = [system_message, user_message]
+    content, _ = llm.get_completion(messages)
+
+    # Clean up the generated code by removing markdown code block markers
+    content = content.strip()
+    if content.startswith("```"):
+        # Find the first newline after the opening ```
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+
+    if content.endswith("```"):
+        # Remove the closing ```
+        content = content[:-3]
+
+    content = content.strip()
+
+    # Write the cleaned code to the file
+    with open(file_path, 'w') as f:
+        f.write(content)
+
+def flatten_deps(deps, prefix="", result=None):
+    """
+    Flattens the nested deps structure into a list of file paths.
+
+    Args:
+        deps: The nested deps structure
+        prefix: The current path prefix
+        result: The result list to append to
+
+    Returns:
+        A list of file paths
+    """
+    if result is None:
+        result = []
+
+    for key, value in deps.items():
+        path = os.path.join(prefix, key)
+        if isinstance(value, list) and not value:  # Empty list means it's a file
+            result.append(path)
+        elif isinstance(value, dict):  # Dictionary means it's a directory
+            flatten_deps(value, path, result)
+
+    return result
+
+def wait_for_server(url, max_attempts=30, delay=1):
+    """
+    Wait for a server to become available by checking if it responds to HTTP requests.
+
+    Args:
+        url: The URL to check
+        max_attempts: Maximum number of attempts to make
+        delay: Delay between attempts in seconds
+
+    Returns:
+        True if the server is available, False otherwise
+    """
+    print(f"Waiting for server at {url} to start...")
+
+    for attempt in range(max_attempts):
+        try:
+            # Try to connect to the server
+            response = requests.get(url, timeout=1)
+            if response.status_code < 400:  # Any successful response
+                print(f"Server is ready after {attempt + 1} attempts!")
+                return True
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            # Server not ready yet
+            if attempt % 5 == 0:  # Print status every 5 attempts
+                print(f"Waiting for server... (attempt {attempt + 1}/{max_attempts})")
+            time.sleep(delay)
+
+    print("Server did not start within the expected time.")
+    return False
+
+def is_port_in_use(port):
+    """
+    Check if a port is in use.
+
+    Args:
+        port: The port number to check
+
+    Returns:
+        True if the port is in use, False otherwise
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+def generate_app(user_prompt):
+    """
+    Main function to generate a complete app based on the user's prompt.
+
+    Args:
+        user_prompt: The user's description of the project they want to create
+    """
+    print(f"Generating app based on prompt: {user_prompt}")
+
+    # Step 1: Generate project structure
+    print("\nStep 1: Generating project structure...")
+    project_structure = generate_project_structure(user_prompt)
+
+    if not project_structure:
+        print("Failed to generate project structure. Exiting.")
+        return
+
+    # Extract deps and descriptions
+    deps = project_structure.get("deps", {})
+    descriptions = project_structure.get("descriptions", {})
+
+    # Print the generated project structure
+    print("\nGenerated Project Structure:")
+    print("----------------------------")
+    print("Dependencies:")
+    print(json.dumps(deps, indent=2))
+    print("\nFile Descriptions:")
+    print(json.dumps(descriptions, indent=2))
+    print("----------------------------")
+
+    # Flatten the deps structure to get a list of all files
+    all_files = flatten_deps(deps)
+
+    # Files to skip during generation (these should already exist in the starter template)
+    ignored_files = [
+        "src/App.jsx",
+        "src/index.jsx"
+    ]
+
+    # Step 2: Copy starter folder to output
+    print("\nStep 2: Copying starter folder to output...")
+    copy_starter_to_output()
+
+    # Step 3: Set up the folder structure in the output directory
+    print("\nStep 3: Setting up folder structure...")
+    # Change to output directory
+    os.chdir("output")
+    setup_folder_structure(descriptions)
+
+    # Step 4: Generate code for each file
+    print("\nStep 4: Generating code for each file...")
+    for file_path in all_files:
+        if file_path in ignored_files:
+            print(f"\nSkipping {file_path} (in ignored files list)...")
+            continue
+
+        file_description = descriptions.get(file_path, "No description provided")
+        print(f"\nGenerating code for {file_path}...")
+        task = f"Implement the {os.path.basename(file_path)} file for the project. {file_description}"
+        generate_leaf_code(
+            task=task,
+            file_path=file_path,
+            file_description=file_description,
+            job_files=descriptions
+        )
+        print(f"✓ Completed {file_path}")
+
+    print("\nCode generation completed successfully!")
+
+    # Step 5: Start the development server
+    print("\nStep 5: Starting development server...")
+
+    # Start the development server in the background
+    print("Starting Vite development server...")
+    # Redirect output to devnull to prevent console clutter
+    with open(os.devnull, 'w') as devnull:
+        vite_process = subprocess.Popen(["npm", "run", "dev"], stdout=devnull, stderr=devnull)
+
+    # Wait for the server to be ready
+    server_url = "http://localhost:5173"
+    if wait_for_server(server_url):
+        # Open the webpage in the default browser
+        print("Opening webpage...")
+        webbrowser.open(server_url)
+    else:
+        print("Could not open webpage because the server did not start properly.")
+        print("You can manually open the browser and navigate to http://localhost:5173")
+
+if __name__ == "__main__":
+    # Example usage
+    user_input = "Create a 3D spinning cube using React Three Fiber"
+    generate_app(user_input)
