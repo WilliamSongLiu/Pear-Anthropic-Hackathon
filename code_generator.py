@@ -57,6 +57,70 @@ def setup_folder_structure(job_files: Dict[str, str]) -> None:
             with open(file_path, 'w') as f:
                 pass  # Create empty file
 
+def generate_app_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
+    """
+    Generate code for the App component and write it to the specified file.
+
+    Args:
+        task: The specific coding task to implement
+        file_path: Path to the file where the code should be written
+        file_description: Description of this file's role in the system
+        job_files: Dictionary of all files and their descriptions for context
+    """
+
+    system_message = {
+        "role": "system",
+        "content": """You will receive specific coding tasks and complete the implementation of individual files.
+        You will be provided with the requirements for what the file does, as well as its role in the overall project.
+        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
+        Only provide code, do not provide an explanation before or after the code.
+        
+        Your task will be to create the App.jsx file. App.jsx will always be the top-level controller and will render the entire project.
+        As such, it is very important that you import all the necessary components and render them. You will have context on what those components 
+        from their file descriptions. You get to define the abstractions that those files implement. Ensure that if the abstractions
+        are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, app.jsx
+        should have very little code in it and can just utilize the components implemented by the other jobs."""
+    }
+
+    # Create context about the file's role and related files
+    related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
+
+    user_message = {
+        "role": "user",
+        "content": f"""Please write code for the following task:
+
+        Task: {task}
+
+        This code will go in: {file_path}
+        File's role: {file_description}
+
+        Related files in the system:
+        {related_files}
+
+        Please write the complete code for this file, including all necessary imports and setup."""
+    }
+
+    messages = [system_message, user_message]
+    content, _ = llm.get_completion(messages)
+
+    # Clean up the generated code by removing markdown code block markers
+    content = content.strip()
+    if content.startswith("```"):
+        # Find the first newline after the opening ```
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+
+    if content.endswith("```"):
+        # Remove the closing ```
+        content = content[:-3]
+
+    content = content.strip()
+
+    # Write the cleaned code to the file
+    with open(file_path, 'w') as f:
+        f.write(content)
+
 def generate_leaf_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
     """
     Generate code for a leaf node task and write it to the specified file.
@@ -67,11 +131,19 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         file_description: Description of this file's role in the system
         job_files: Dictionary of all files and their descriptions for context
     """
+    # Read App.jsx code to provide interface for leaf components
+    try:
+        with open('src/App.jsx', 'r') as f:
+            app_code = f.read()
+    except FileNotFoundError:
+        app_code = ""
+
     system_message = {
         "role": "system",
         "content": """You will receive specific coding tasks and complete the implementation of individual files.
         You will be provided with the requirements for what the file does, as well as its role in the overall project.
-        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
+        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existence of any files beyond the provided ones.
+        Additionally, you have access to the App.jsx code which defines how your component will be used. Please ensure your implementation conforms to the interface as invoked by App.jsx.
         Only provide code, do not provide an explanation before or after the code."""
     }
 
@@ -89,6 +161,11 @@ File's role: {file_description}
 
 Related files in the system:
 {related_files}
+
+App.jsx code:
+```jsx
+{app_code}
+```
 
 Please write the complete code for this file, including all necessary imports and setup."""
     }
@@ -141,6 +218,15 @@ if __name__ == "__main__":
     # Change to output directory
     os.chdir("output")
     setup_folder_structure(job_files)
+
+    # Step 2.5: Create App.jsx
+    print("\nStep 2.5: Creating App.jsx...")
+    generate_app_code(
+        task="Create the App.jsx file for the 3D cube application.",
+        file_path="src/App.jsx",
+        file_description="Main application component that renders the Scene component and provides the overall structure for the application.",
+        job_files=job_files
+    )
 
     # Step 3: Generate code for each file
     print("\nStep 3: Generating code for each file...")

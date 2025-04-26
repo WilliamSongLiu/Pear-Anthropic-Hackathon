@@ -32,52 +32,52 @@ def generate_project_structure(user_prompt):
         {
             "role": "user",
             "content": f"""First, you are provided with a starter code template containing the following files:
-- index.html
-- src/App.jsx
-- index.jsx
-- styles.css
-You do not have to specify these files in your described project structure.
+            - index.html
+            - src/App.jsx
+            - src/index.jsx
+            - src/styles.css
+            You should include these files in your described project structure.
 
-Now, analyze the user's prompt to understand the project requirements. Then, follow these steps:
+            Now, analyze the user's prompt to understand the project requirements. Then, follow these steps:
 
-1. Generate the 'deps' object:
-   - Create a hierarchical structure representing the project's file and folder organization.
-   - Include appropriate subfolders for assets, components, and other necessary project elements.
-   - List individual files within each folder.
-   - Represent the structure as nested objects, where each key is a file or folder name, and the value is an array of its contents (empty array for files).
-   - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
-   - Do not create files for sprites, music, favicons, or images. Only utilize JavaScript to create 3D models using React Three Fiber.
-   - Do not create unrelated files for README.md, package.json, or .gitignore.
-   - Create jsx files instead of js files.
+            1. Generate the 'deps' object:
+            - Create a hierarchical structure representing the project's file and folder organization.
+            - Include appropriate subfolders for assets, components, and other necessary project elements.
+            - List individual files within each folder.
+            - Represent the structure as nested objects, where each key is a file or folder name, and the value is an array of its contents (empty array for files).
+            - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
+            - Do not create files for sprites, music, favicons, or images. Only utilize JavaScript to create 3D models using React Three Fiber.
+            - Do not create unrelated files for README.md, package.json, or .gitignore.
+            - Create jsx files instead of js files.
 
-2. Generate the 'descriptions' object:
-   - For each file in the 'deps' object, create a corresponding entry in the 'descriptions' object.
-   - The key should be the file path, and the value should be a brief description of the file's purpose or contents.
-   - Ensure descriptions are concise but informative, explaining the role of each file in the project.
-   - If there are files requiring 3D models, describe the task as creating the 3D object from primitives, not by importing outside 3D models
+            2. Generate the 'descriptions' object:
+            - For each file in the 'deps' object, create a corresponding entry in the 'descriptions' object.
+            - The key should be the file path, and the value should be a brief description of the file's purpose or contents.
+            - Ensure descriptions are concise but informative, explaining the role of each file in the project.
+            - If there are files requiring 3D models, describe the task as creating the 3D object from primitives, not by importing outside 3D models
 
-3. Format your response as a JSON object with 'deps' and 'descriptions' as its main properties.
+            3. Format your response as a JSON object with 'deps' and 'descriptions' as its main properties.
 
-Your final output should be formatted as follows:
+            Your final output should be formatted as follows:
 
-<answer>
-{{
-  "deps": {{
-    // Your generated deps object here
-  }},
-  "descriptions": {{
-    // Your generated descriptions object here
-  }}
-}}
-</answer>
+            <answer>
+            {{
+            "deps": {{
+                // Your generated deps object here
+            }},
+            "descriptions": {{
+                // Your generated descriptions object here
+            }}
+            }}
+            </answer>
 
-Remember to tailor the project structure and descriptions to the specific requirements mentioned in the user's prompt:
+            Remember to tailor the project structure and descriptions to the specific requirements mentioned in the user's prompt:
 
-<user_prompt>
-{user_prompt}
-</user_prompt>
+            <user_prompt>
+            {user_prompt}
+            </user_prompt>
 
-Ensure that your generated project structure and file descriptions are relevant to the user's request and follow best practices for the type of project they're asking about."""
+            Ensure that your generated project structure and file descriptions are relevant to the user's request and follow best practices for the type of project they're asking about."""
         }
     ]
 
@@ -145,6 +145,70 @@ def setup_folder_structure(job_files: Dict[str, str]) -> None:
             with open(file_path, 'w') as f:
                 pass  # Create empty file
 
+def generate_app_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
+    """
+    Generate code for the App component and write it to the specified file.
+
+    Args:
+        task: The specific coding task to implement
+        file_path: Path to the file where the code should be written
+        file_description: Description of this file's role in the system
+        job_files: Dictionary of all files and their descriptions for context
+    """
+
+    system_message = {
+        "role": "system",
+        "content": """You will receive specific coding tasks and complete the implementation of individual files.
+        You will be provided with the requirements for what the file does, as well as its role in the overall project.
+        The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
+        Only provide code, do not provide an explanation before or after the code.
+        
+        Your task will be to create the App.jsx file. App.jsx will always be the top-level controller and will render the entire project.
+        As such, it is very important that you import all the necessary components and render them. You will have context on what those components 
+        from their file descriptions. You get to define the abstractions that those files implement. Ensure that if the abstractions
+        are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, app.jsx
+        should have very little code in it and can just utilize the components implemented by the other jobs."""
+    }
+
+    # Create context about the file's role and related files
+    related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
+
+    user_message = {
+        "role": "user",
+        "content": f"""Please write code for the following task:
+
+        Task: {task}
+
+        This code will go in: {file_path}
+        File's role: {file_description}
+
+        Related files in the system:
+        {related_files}
+
+        Please write the complete code for this file, including all necessary imports and setup."""
+    }
+
+    messages = [system_message, user_message]
+    content, _ = llm.get_completion(messages)
+
+    # Clean up the generated code by removing markdown code block markers
+    content = content.strip()
+    if content.startswith("```"):
+        # Find the first newline after the opening ```
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+
+    if content.endswith("```"):
+        # Remove the closing ```
+        content = content[:-3]
+
+    content = content.strip()
+
+    # Write the cleaned code to the file
+    with open(file_path, 'w') as f:
+        f.write(content)
+
 def generate_leaf_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
     """
     Generate code for a leaf node task and write it to the specified file.
@@ -170,15 +234,15 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         "role": "user",
         "content": f"""Please write code for the following task:
 
-Task: {task}
+        Task: {task}
 
-This code will go in: {file_path}
-File's role: {file_description}
+        This code will go in: {file_path}
+        File's role: {file_description}
 
-Related files in the system:
-{related_files}
+        Related files in the system:
+        {related_files}
 
-Please write the complete code for this file, including all necessary imports and setup."""
+        Please write the complete code for this file, including all necessary imports and setup."""
     }
 
     messages = [system_message, user_message]
@@ -318,6 +382,15 @@ def generate_app(user_prompt):
     os.chdir("output")
     setup_folder_structure(descriptions)
 
+    # Step 3.5: Create App.jsx
+    print("\nStep 3.5: Creating App.jsx...")
+    generate_app_code(
+        task="Create the App.jsx file.",
+        file_path="src/App.jsx",
+        file_description="Main application component that renders the Scene component and provides the overall structure for the application.",
+        job_files=descriptions
+    )
+
     # Step 4: Generate code for each file
     print("\nStep 4: Generating code for each file...")
     for file_path in all_files:
@@ -358,5 +431,5 @@ def generate_app(user_prompt):
         print("You can manually open the browser and navigate to http://localhost:5173")
 
 if __name__ == "__main__":
-    user_input = "Create a simple aim trainer game using React Three Fiber. The user has a pistol and can shoot down spherical targets that are spawned one at a time in front of the user. The score is increased by 100 for every target they hit. The shooting detection is hitscan, not projectile."
+    user_input = "Create a spinning 3D cube"
     generate_app(user_input)
