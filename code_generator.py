@@ -58,6 +58,7 @@ def generate_project_structure(user_prompt: str) -> Dict:
             - Do not create unrelated files for README.md, package.json, or .gitignore.
             - Create jsx files instead of js files.
             - IMPORTANT: The structure must be flat. App.jsx is the only file that can import other files. Each leaf file must work standalone and not import additional files such as hooks or components.
+            - DO NOT generate a Scene.jsx file as that is the role of App.jsx.
 
             2. Generate the 'descriptions' object:
             - For each file in the 'files' array, create a corresponding entry in the 'descriptions' object.
@@ -175,10 +176,14 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
         Only provide code, do not provide an explanation before or after the code.
 
         Your task will be to create the App.jsx file. App.jsx will always be the top-level controller and will render the entire project.
-        As such, it is very important that you import all the necessary components and render them. You will have context on what those components
-        from their file descriptions. You get to define the abstractions that those files implement. Ensure that if the abstractions
-        are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, App.jsx
-        should have very little code in it and can just utilize the components implemented by the other jobs."""
+        As such, it is very important that you:
+        1. Create the Canvas component from React Three Fiber
+        2. Import all the necessary components from the other files
+        3. Render these components within the Canvas
+        4. Set up any necessary lighting, camera, or other scene elements
+
+        You will have context on what those components do from their file descriptions. You get to define the abstractions that those files implement.
+        Ensure that if the abstractions are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project."""
     }
 
     related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
