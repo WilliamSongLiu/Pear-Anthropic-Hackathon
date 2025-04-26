@@ -1,0 +1,4 @@
+# requirements.txt
+anthropic
+python-dotenv
+openai
