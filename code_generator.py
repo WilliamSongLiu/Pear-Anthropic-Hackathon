@@ -64,7 +64,8 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         2. Include necessary imports
         3. Follow best practices for the language/framework
         4. Consider the file's role in the larger system
-        5. Do not write excessive or unnecessary code"""
+        5. Do not write excessive or unnecessary code
+        6. Only provide code, do not provide an explanation before or after the code"""
     }
 
     # Create context about the file's role and related files
@@ -88,7 +89,21 @@ Please write the complete code for this file, including all necessary imports an
     messages = [system_message, user_message]
     content, _ = llm.get_completion(messages)
 
-    # Write the generated code to the file
+    # Clean up the generated code by removing markdown code block markers
+    content = content.strip()
+    if content.startswith("```"):
+        # Find the first newline after the opening ```
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+
+    if content.endswith("```"):
+        # Remove the closing ```
+        content = content[:-3]
+
+    content = content.strip()
+
+    # Write the cleaned code to the file
     with open(file_path, 'w') as f:
         f.write(content)
 
