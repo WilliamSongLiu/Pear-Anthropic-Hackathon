@@ -32,12 +32,12 @@ def generate_project_structure(user_prompt: str) -> Dict:
         user_prompt: The user's description of the project they want to create
 
     Returns:
-        A dictionary containing 'deps' and 'descriptions' for the project structure
+        A dictionary containing 'files' and 'descriptions' for the project structure
     """
     messages = [
         {
             "role": "system",
-            "content": """You are tasked with generating a project structure and file descriptions for a React Three Fiber project based on a user's prompt. Your output should be a JSON object containing two main objects: 'deps' (dependencies) and 'descriptions'."""
+            "content": """You are tasked with generating a project structure and file descriptions for a React Three Fiber project based on a user's prompt. Your output should be a JSON object containing two main objects: 'files' (list of files) and 'descriptions'."""
         },
         {
             "role": "user",
@@ -50,31 +50,31 @@ def generate_project_structure(user_prompt: str) -> Dict:
 
             Now, analyze the user's prompt to understand the project requirements. Then, follow these steps:
 
-            1. Generate the 'deps' object:
-            - Create a hierarchical structure representing the project's file and folder organization.
-            - Include appropriate subfolders for assets, components, and other necessary project elements.
-            - List individual files within each folder.
-            - Represent the structure as nested objects, where each key is a file or folder name, and the value is an array of its contents (empty array for files).
-            - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
+            1. Generate the 'files' array:
+            - Create a flat list of files needed for the project.
+            - Include appropriate files for the 3D scene, components, and other necessary project elements.
+            - The user will ask for simple projects, so create as minimal a set of files as required to complete the project.
             - Do not create files for sprites, music, favicons, or images. Only utilize JavaScript to create 3D models using React Three Fiber.
             - Do not create unrelated files for README.md, package.json, or .gitignore.
             - Create jsx files instead of js files.
+            - IMPORTANT: The structure must be flat. App.jsx is the only file that can import other files. Each leaf file must work standalone and not import additional files such as hooks or components.
 
             2. Generate the 'descriptions' object:
-            - For each file in the 'deps' object, create a corresponding entry in the 'descriptions' object.
+            - For each file in the 'files' array, create a corresponding entry in the 'descriptions' object.
             - The key should be the file path, and the value should be a brief description of the file's purpose or contents.
             - Ensure descriptions are concise but informative, explaining the role of each file in the project.
-            - If there are files requiring 3D models, describe the task as creating the 3D object from primitives, not by importing outside 3D models
+            - If there are files requiring 3D models, describe the task as creating the 3D object from primitives, not by importing outside 3D models.
+            - For leaf files, clearly specify that they must be self-contained and not import other files.
 
-            3. Format your response as a JSON object with 'deps' and 'descriptions' as its main properties.
+            3. Format your response as a JSON object with 'files' and 'descriptions' as its main properties.
 
             Your final output should be formatted as follows:
 
             <answer>
             {{
-            "deps": {{
-                // Your generated deps object here
-            }},
+            "files": [
+                // Your generated files array here
+            ],
             "descriptions": {{
                 // Your generated descriptions object here
             }}
@@ -302,13 +302,13 @@ def generate_react_three_app(user_prompt: str) -> None:
         print("Failed to generate project structure. Exiting.")
         return
 
-    deps = project_structure.get("deps", {})
+    files = project_structure.get("files", [])
     descriptions = project_structure.get("descriptions", {})
 
     print("\nGenerated Project Structure:")
     print("----------------------------")
-    print("Dependencies:")
-    print(json.dumps(deps, indent=2))
+    print("Files:")
+    print(json.dumps(files, indent=2))
     print("\nFile Descriptions:")
     print(json.dumps(descriptions, indent=2))
     print("----------------------------")
@@ -333,7 +333,7 @@ def generate_react_three_app(user_prompt: str) -> None:
 
     # Step 5: Generate code for each file
     print("\nStep 5: Generating code for each file...")
-    for file_path in descriptions.keys():
+    for file_path in files:
         if file_path in IGNORED_FILES:
             print(f"\nSkipping {file_path} (in ignored files list)...")
             continue
