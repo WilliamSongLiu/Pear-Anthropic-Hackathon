@@ -17,7 +17,6 @@ def generate_project_structure(user_prompt):
 
 1. Generate the 'deps' object:
    - Create a hierarchical structure representing the project's file and folder organization.
-   - Start with the root folder and include common files like 'index.html'.
    - Create a 'src' folder for the main source code.
    - Include appropriate subfolders for assets, components, and other necessary project elements.
    - List individual files within each folder.
@@ -25,6 +24,7 @@ def generate_project_structure(user_prompt):
    - The user will ask for simple projects, so create as minimal of a dependency graph as required to complete the project.
    - Do not create files for sprites, music, favicons, or images. Only utilize javascript files to create 3D models using React Three Fiber.
    - Do not create files for README.md, package.json, or index.html.
+   - Create jsx files instead of js files.
 
 2. Generate the 'descriptions' object:
    - For each file in the 'deps' object, create a corresponding entry in the 'descriptions' object.
