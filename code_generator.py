@@ -223,7 +223,12 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         "content": """You will receive specific coding tasks and complete the implementation of individual files.
         You will be provided with the requirements for what the file does, as well as its role in the overall project.
         The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
-        Only provide code, do not provide an explanation before or after the code."""
+        Only provide code, do not provide an explanation before or after the code.
+
+        IMPORTANT: You have NO access to external files such as textures, models, or images.
+        You MUST build all 3D objects using only primitives (Box, Sphere, Cylinder, etc.) from React Three Fiber.
+        You MUST define all materials and colors directly in your code.
+        DO NOT attempt to import or load any external resources."""
     }
 
     related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
@@ -239,7 +244,9 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         Related files in the system:
         {related_files}
 
-        Please write the complete code for this file, including all necessary imports and setup."""
+        Please write the complete code for this file, including all necessary imports and setup.
+
+        Remember: You have NO access to external files. Build all 3D objects using only primitives and define all materials directly in your code."""
     }
 
     content, _ = LLM.get_completion([system_message, user_message])
@@ -371,5 +378,5 @@ def generate_react_three_app(user_prompt: str) -> None:
         print("You can manually open the browser and navigate to http://localhost:5173")
 
 if __name__ == "__main__":
-    user_input = "Create a spinning 3D cube"
+    user_input = "Create a 3D office scene with a desk and monitor on it"
     generate_react_three_app(user_input)
