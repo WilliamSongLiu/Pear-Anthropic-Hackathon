@@ -9,11 +9,22 @@ import time
 import requests
 import socket
 
-company = "anthropic"
-model = "claude-3-7-sonnet-20250219"
-llm = make_llm(company, model, temperature=0)
+# Configuration
+COMPANY = "anthropic"
+MODEL = "claude-3-7-sonnet-20250219"
+LLM = make_llm(COMPANY, MODEL, temperature=0)
 
-def generate_project_structure(user_prompt):
+# Constants
+STARTER_DIR = "starter"
+OUTPUT_DIR = "output"
+IGNORED_FILES = [
+    "index.html",
+    "src/App.jsx",
+    "src/index.jsx"
+]
+
+# Project Structure Generation
+def generate_project_structure(user_prompt: str) -> Dict:
     """
     Generates a project structure based on the user's prompt.
 
@@ -23,7 +34,6 @@ def generate_project_structure(user_prompt):
     Returns:
         A dictionary containing 'deps' and 'descriptions' for the project structure
     """
-    # Construct the system and user messages
     messages = [
         {
             "role": "system",
@@ -81,47 +91,34 @@ def generate_project_structure(user_prompt):
         }
     ]
 
-    # Get completion from Claude
-    response, _ = llm.get_completion(messages)
+    response, _ = LLM.get_completion(messages)
 
-    # Extract JSON from the response
     try:
-        # Find the JSON content between <answer> tags
         start = response.find("<answer>") + len("<answer>")
         end = response.find("</answer>")
         json_str = response[start:end].strip()
-
-        # Parse and return the JSON
         return json.loads(json_str)
     except Exception as e:
         print(f"Error parsing response: {e}")
         return None
 
+# File System Operations
 def copy_starter_to_output() -> None:
     """
     Creates a copy of the 'starter' folder in the 'output' folder.
     If the output folder already exists, it will be removed first to ensure a clean copy.
     Excludes node_modules and package-lock.json, then runs npm install.
     """
-    starter_dir = "starter"
-    output_dir = "output"
+    if os.path.exists(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
 
-    # Remove output directory if it exists
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-
-    # Define what to ignore during copy
     ignore_patterns = shutil.ignore_patterns('node_modules', 'package-lock.json')
+    shutil.copytree(STARTER_DIR, OUTPUT_DIR, ignore=ignore_patterns)
+    print(f"Successfully copied {STARTER_DIR} to {OUTPUT_DIR}")
 
-    # Copy the starter directory to output, excluding specified files/directories
-    shutil.copytree(starter_dir, output_dir, ignore=ignore_patterns)
-    print(f"Successfully copied {starter_dir} to {output_dir}")
-
-    # Run npm install in the output directory
     print("Installing dependencies...")
-    # Redirect output to devnull to prevent console clutter
     with open(os.devnull, 'w') as devnull:
-        subprocess.run(["npm", "install"], cwd=output_dir, check=True, stdout=devnull, stderr=devnull)
+        subprocess.run(["npm", "install"], cwd=OUTPUT_DIR, check=True, stdout=devnull, stderr=devnull)
     print("Dependencies installed successfully")
 
 def setup_folder_structure(job_files: Dict[str, str]) -> None:
@@ -133,17 +130,32 @@ def setup_folder_structure(job_files: Dict[str, str]) -> None:
         job_files: Dictionary mapping file paths to their descriptions
     """
     for file_path, _ in job_files.items():
-        # Get the directory path
         dir_path = os.path.dirname(file_path)
-
-        # Create directories if they don't exist
         if dir_path and not os.path.exists(dir_path):
             os.makedirs(dir_path)
-
-        # Create file if it doesn't exist
         if not os.path.exists(file_path):
             with open(file_path, 'w') as f:
-                pass  # Create empty file
+                pass
+
+# Code Generation
+def _clean_generated_code(content: str) -> str:
+    """
+    Cleans up generated code by removing markdown code block markers.
+
+    Args:
+        content: The generated code content
+
+    Returns:
+        Cleaned code content
+    """
+    content = content.strip()
+    if content.startswith("```"):
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+    if content.endswith("```"):
+        content = content[:-3]
+    return content.strip()
 
 def generate_app_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
     """
@@ -155,7 +167,6 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
         file_description: Description of this file's role in the system
         job_files: Dictionary of all files and their descriptions for context
     """
-
     system_message = {
         "role": "system",
         "content": """You will receive specific coding tasks and complete the implementation of individual files.
@@ -166,13 +177,11 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
         Your task will be to create the App.jsx file. App.jsx will always be the top-level controller and will render the entire project.
         As such, it is very important that you import all the necessary components and render them. You will have context on what those components
         from their file descriptions. You get to define the abstractions that those files implement. Ensure that if the abstractions
-        are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, app.jsx
+        are implemented correctly per their file descriptions, that the App.jsx file should be able to render the entire project. As such, App.jsx
         should have very little code in it and can just utilize the components implemented by the other jobs."""
     }
 
-    # Create context about the file's role and related files
     related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
-
     user_message = {
         "role": "user",
         "content": f"""Please write code for the following task:
@@ -188,24 +197,9 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
         Please write the complete code for this file, including all necessary imports and setup."""
     }
 
-    messages = [system_message, user_message]
-    content, _ = llm.get_completion(messages)
+    content, _ = LLM.get_completion([system_message, user_message])
+    content = _clean_generated_code(content)
 
-    # Clean up the generated code by removing markdown code block markers
-    content = content.strip()
-    if content.startswith("```"):
-        # Find the first newline after the opening ```
-        first_newline = content.find("\n")
-        if first_newline != -1:
-            content = content[first_newline + 1:]
-
-    if content.endswith("```"):
-        # Remove the closing ```
-        content = content[:-3]
-
-    content = content.strip()
-
-    # Write the cleaned code to the file
     with open(file_path, 'w') as f:
         f.write(content)
 
@@ -227,9 +221,7 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         Only provide code, do not provide an explanation before or after the code."""
     }
 
-    # Create context about the file's role and related files
     related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
-
     user_message = {
         "role": "user",
         "content": f"""Please write code for the following task:
@@ -245,28 +237,14 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         Please write the complete code for this file, including all necessary imports and setup."""
     }
 
-    messages = [system_message, user_message]
-    content, _ = llm.get_completion(messages)
+    content, _ = LLM.get_completion([system_message, user_message])
+    content = _clean_generated_code(content)
 
-    # Clean up the generated code by removing markdown code block markers
-    content = content.strip()
-    if content.startswith("```"):
-        # Find the first newline after the opening ```
-        first_newline = content.find("\n")
-        if first_newline != -1:
-            content = content[first_newline + 1:]
-
-    if content.endswith("```"):
-        # Remove the closing ```
-        content = content[:-3]
-
-    content = content.strip()
-
-    # Write the cleaned code to the file
     with open(file_path, 'w') as f:
         f.write(content)
 
-def wait_for_server(url, max_attempts=30, delay=1):
+# Server Management
+def wait_for_server(url: str, max_attempts: int = 30, delay: int = 1) -> bool:
     """
     Wait for a server to become available by checking if it responds to HTTP requests.
 
@@ -282,21 +260,19 @@ def wait_for_server(url, max_attempts=30, delay=1):
 
     for attempt in range(max_attempts):
         try:
-            # Try to connect to the server
             response = requests.get(url, timeout=1)
-            if response.status_code < 400:  # Any successful response
+            if response.status_code < 400:
                 print(f"Server is ready after {attempt + 1} attempts!")
                 return True
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            # Server not ready yet
-            if attempt % 5 == 0:  # Print status every 5 attempts
+            if attempt % 5 == 0:
                 print(f"Waiting for server... (attempt {attempt + 1}/{max_attempts})")
             time.sleep(delay)
 
     print("Server did not start within the expected time.")
     return False
 
-def is_port_in_use(port):
+def is_port_in_use(port: int) -> bool:
     """
     Check if a port is in use.
 
@@ -309,9 +285,10 @@ def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
-def generate_app(user_prompt):
+# Main Application Generation
+def generate_react_three_app(user_prompt: str) -> None:
     """
-    Main function to generate a complete app based on the user's prompt.
+    Main function to generate a complete React Three Fiber app based on the user's prompt.
 
     Args:
         user_prompt: The user's description of the project they want to create
@@ -321,16 +298,13 @@ def generate_app(user_prompt):
     # Step 1: Generate project structure
     print("\nStep 1: Generating project structure...")
     project_structure = generate_project_structure(user_prompt)
-
     if not project_structure:
         print("Failed to generate project structure. Exiting.")
         return
 
-    # Extract deps and descriptions
     deps = project_structure.get("deps", {})
     descriptions = project_structure.get("descriptions", {})
 
-    # Print the generated project structure
     print("\nGenerated Project Structure:")
     print("----------------------------")
     print("Dependencies:")
@@ -339,25 +313,17 @@ def generate_app(user_prompt):
     print(json.dumps(descriptions, indent=2))
     print("----------------------------")
 
-    # Files to skip during generation (these should already exist in the starter template)
-    ignored_files = [
-        "index.html",
-        "src/App.jsx",
-        "src/index.jsx"
-    ]
-
     # Step 2: Copy starter folder to output
     print("\nStep 2: Copying starter folder to output...")
     copy_starter_to_output()
 
     # Step 3: Set up the folder structure in the output directory
     print("\nStep 3: Setting up folder structure...")
-    # Change to output directory
-    os.chdir("output")
+    os.chdir(OUTPUT_DIR)
     setup_folder_structure(descriptions)
 
-    # Step 3.5: Create App.jsx
-    print("\nStep 3.5: Creating App.jsx...")
+    # Step 4: Generate App.jsx
+    print("\nStep 4: Creating App.jsx...")
     generate_app_code(
         task="Create the App.jsx file.",
         file_path="src/App.jsx",
@@ -365,10 +331,10 @@ def generate_app(user_prompt):
         job_files=descriptions
     )
 
-    # Step 4: Generate code for each file
-    print("\nStep 4: Generating code for each file...")
+    # Step 5: Generate code for each file
+    print("\nStep 5: Generating code for each file...")
     for file_path in descriptions.keys():
-        if file_path in ignored_files:
+        if file_path in IGNORED_FILES:
             print(f"\nSkipping {file_path} (in ignored files list)...")
             continue
 
@@ -385,19 +351,14 @@ def generate_app(user_prompt):
 
     print("\nCode generation completed successfully!")
 
-    # Step 5: Start the development server
-    print("\nStep 5: Starting development server...")
-
-    # Start the development server in the background
+    # Step 6: Start the development server
+    print("\nStep 6: Starting development server...")
     print("Starting Vite development server...")
-    # Redirect output to devnull to prevent console clutter
     with open(os.devnull, 'w') as devnull:
         vite_process = subprocess.Popen(["npm", "run", "dev"], stdout=devnull, stderr=devnull)
 
-    # Wait for the server to be ready
     server_url = "http://localhost:5173"
     if wait_for_server(server_url):
-        # Open the webpage in the default browser
         print("Opening webpage...")
         webbrowser.open(server_url)
     else:
@@ -406,4 +367,4 @@ def generate_app(user_prompt):
 
 if __name__ == "__main__":
     user_input = "Create a spinning 3D cube"
-    generate_app(user_input)
+    generate_react_three_app(user_input)
