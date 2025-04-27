@@ -237,6 +237,8 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         You MUST build all 3D objects using only primitives (Box, Sphere, Cylinder, etc.) from React Three Fiber.
         You MUST define all materials and colors directly in your code.
         DO NOT attempt to import or load any external resources.
+        DO NOT use @react-spring/web or @react-spring/three or @react-three/spring.
+        Ensure you import THREE if you use it.
         DO NOT use any fonts."""
     }
 
