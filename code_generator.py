@@ -27,8 +27,8 @@ IGNORED_FILES = [
     "src/index.jsx"
 ]
 # Port configuration
-PORT_SEQUENTIAL = 5173
-PORT_PARALLEL = 5174
+PORT_SEQUENTIAL = 5175
+PORT_PARALLEL = 5176
 
 # Project Structure Generation
 def generate_project_structure(user_prompt: str) -> Dict:
@@ -218,7 +218,7 @@ def generate_app_code(task: str, file_path: str, file_description: str, job_file
     with open(file_path, 'w') as f:
         f.write(content)
 
-def generate_leaf_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str]) -> None:
+def generate_leaf_code(task: str, file_path: str, file_description: str, job_files: Dict[str, str], app_code: str) -> None:
     """
     Generate code for a leaf node task and write it to the specified file.
 
@@ -232,13 +232,15 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         "role": "system",
         "content": """You will receive specific coding tasks and complete the implementation of individual files.
         You will be provided with the requirements for what the file does, as well as its role in the overall project.
+        You will also be provided the App.jsx code that will import your file. You must adhere to how your file is imported and used in App.jsx.
         The project structure provided is a complete and exhaustive list of the files available. Do not assume the existance of any files beyond the provided ones.
         Only provide code, do not provide an explanation before or after the code.
 
         IMPORTANT: You have NO access to external files such as textures, models, or images.
         You MUST build all 3D objects using only primitives (Box, Sphere, Cylinder, etc.) from React Three Fiber.
         You MUST define all materials and colors directly in your code.
-        DO NOT attempt to import or load any external resources."""
+        DO NOT attempt to import or load any external resources.
+        DO NOT use any fonts."""
     }
 
     related_files = "\n".join([f"- {path}: {desc}" for path, desc in job_files.items() if path != file_path])
@@ -250,6 +252,9 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
 
         This code will go in: {file_path}
         File's role: {file_description}
+
+        App.jsx code:
+        {app_code}
 
         Related files in the system:
         {related_files}
@@ -388,6 +393,9 @@ def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> No
         job_files=descriptions
     )
 
+    with open("src/App.jsx", 'r') as f:
+        app_code = f.read()
+
     # Step 5: Generate code for each file (either sequentially or in parallel)
     print(f"\nStep 5: Generating code for each file {'in parallel' if use_parallel else 'sequentially'}...")
 
@@ -406,7 +414,8 @@ def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> No
                     task=task,
                     file_path=file_path,
                     file_description=file_description,
-                    job_files=descriptions
+                    job_files=descriptions,
+                    app_code=app_code
                 )
                 print(f"✓ Completed {file_path}")
                 return True
@@ -486,6 +495,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Define the prompt here
-    user_input = "Create a 3D office scene with a desk and monitor on it"
+    user_input = "Please implement a 3D pokemon lite game called emojimon in a website. It should be a very simple implementation that just involves battling one emoji with 2 basic attacks. The user attacks and then the emoji attacks, and this is repeated until one of the two dies. Maintain state for the user's health and the emoji's health."
 
     generate_react_three_app(user_input, args.parallel)

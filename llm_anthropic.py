@@ -19,9 +19,13 @@ class AnthropicLLM(LLM):
 			max_tokens=10000,
 			system=messages[0]["content"],
 			messages=messages[1:],
+			thinking={
+				"type":"enabled",
+				"budget_tokens":1024
+			},
 			**({"tools": tools} if tools is not None else {}),
             **({"response_format": response_format} if response_format is not None else {}),
-			**({"temperature": self.temperature} if self.temperature is not None else {})
+			**({"temperature": 1} if self.temperature is not None else {}),
 		)
 
 		content = None
@@ -29,7 +33,7 @@ class AnthropicLLM(LLM):
 		for block in response.content:
 			if block.type == "tool_use":
 				tool_call = block.input
-			else:
+			elif block.type == "text":
 				content = block.text
 
 		return content, tool_call
