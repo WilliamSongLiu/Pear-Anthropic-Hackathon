@@ -234,7 +234,7 @@ def generate_leaf_code(task: str, file_path: str, file_description: str, job_fil
         Only provide code, do not provide an explanation before or after the code.
 
         IMPORTANT: You have NO access to external files such as textures, models, or images.
-        You MUST build all 3D objects using only primitives (Box, Sphere, Cylinder, etc.) from React Three Fiber.
+        You MUST build all 3D objects using only basic existing primitives like Box, Sphere, Cylinder, etc. from React Three Fiber.
         You MUST define all materials and colors directly in your code.
         DO NOT attempt to import or load any external resources.
         DO NOT use @react-spring/web or @react-spring/three or @react-three/spring.
@@ -484,11 +484,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate a React Three Fiber app based on a prompt')
     parser.add_argument('-p', '--parallel', action='store_true',
                         help='Use parallel processing for file generation')
-    parser.add_argument('--port', type=int, default=None,
+    parser.add_argument('--port', type=int, default=3001,
                         help='Port to use for the development server')
+    parser.add_argument('--prompt', type=str, default="Please implement a 3D pokemon lite game called emojimon in a website. It should be a very simple implementation that just involves battling one emoji with 2 basic attacks. The user attacks and then the emoji attacks, and this is repeated until one of the two dies. Maintain state for the user's health and the emoji's health.",
+                        help='The prompt describing the app to generate')
     args = parser.parse_args()
 
-    # Define the prompt here
-    user_input = "Please implement a 3D pokemon lite game called emojimon in a website. It should be a very simple implementation that just involves battling one emoji with 2 basic attacks. The user attacks and then the emoji attacks, and this is repeated until one of the two dies. Maintain state for the user's health and the emoji's health."
-
-    generate_react_three_app(user_input, args.parallel, args.port)
+    generate_react_three_app(args.prompt, args.parallel, args.port)
