@@ -26,9 +26,6 @@ IGNORED_FILES = [
     "src/App.jsx",
     "src/index.jsx"
 ]
-# Port configuration
-PORT_SEQUENTIAL = 5175
-PORT_PARALLEL = 5176
 
 # Project Structure Generation
 def generate_project_structure(user_prompt: str) -> Dict:
@@ -331,13 +328,14 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
     raise RuntimeError(f"Could not find an available port after {max_attempts} attempts")
 
 # Main Application Generation
-def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> None:
+def generate_react_three_app(user_prompt: str, use_parallel: bool = False, port: int = None) -> None:
     """
     Main function to generate a complete React Three Fiber app based on the user's prompt.
 
     Args:
         user_prompt: The user's description of the project they want to create
         use_parallel: Whether to use parallel processing for file generation
+        port: The port to use for the development server
     """
     # Start the timer
     start_time = time.time()
@@ -345,17 +343,9 @@ def generate_react_three_app(user_prompt: str, use_parallel: bool = False) -> No
     print(f"Generating app based on prompt: {user_prompt}")
     print(f"Using {'parallel' if use_parallel else 'sequential'} processing")
 
-    # Determine output directory based on processing mode
-    output_dir = OUTPUT_DIR_PARALLEL if use_parallel else OUTPUT_DIR_SEQUENTIAL
-    base_port = PORT_PARALLEL if use_parallel else PORT_SEQUENTIAL
-
-    # Find an available port
-    try:
-        port = find_available_port(base_port)
-        print(f"Using port {port} for the development server")
-    except RuntimeError as e:
-        print(f"Warning: {e}. Using default port {base_port}.")
-        port = base_port
+    # Determine output directory based on processing mode and port
+    base_output_dir = OUTPUT_DIR_PARALLEL if use_parallel else OUTPUT_DIR_SEQUENTIAL
+    output_dir = f"{base_output_dir}_{port}" if port else base_output_dir
 
     # Step 1: Generate project structure
     print("\nStep 1: Generating project structure...")
@@ -492,9 +482,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate a React Three Fiber app based on a prompt')
     parser.add_argument('-p', '--parallel', action='store_true',
                         help='Use parallel processing for file generation')
+    parser.add_argument('--port', type=int, default=None,
+                        help='Port to use for the development server')
     args = parser.parse_args()
 
     # Define the prompt here
     user_input = "Please implement a 3D pokemon lite game called emojimon in a website. It should be a very simple implementation that just involves battling one emoji with 2 basic attacks. The user attacks and then the emoji attacks, and this is repeated until one of the two dies. Maintain state for the user's health and the emoji's health."
 
-    generate_react_three_app(user_input, args.parallel)
+    generate_react_three_app(user_input, args.parallel, args.port)
